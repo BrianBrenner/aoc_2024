@@ -1,0 +1,14 @@
+next too big, should skip first
+1 5 6 7 9
+
+first too big should skip first
+10 1 3 5 7
+
+second too small should skip second
+10 1 12 14 16
+
+second too big should skip second
+1 10 3 5 7
+
+should skip last
+1 3 6 7 20
