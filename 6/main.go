@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -21,195 +20,191 @@ var nextDirs = map[string]string{
 	"<": "^",
 }
 
-func move(r, c int, grid, visited [][]string) (int, int, [][]string, [][]string) {
-	visited[r][c] = "X"
-	curDir := grid[r][c]
-	dirCoord := dirCoords[curDir]
-	nextR := r + dirCoord[0]
-	nextC := c + dirCoord[1]
-
-	if !(nextR >= 0 && nextR < len(grid) && nextC >= 0 && nextC < len(grid[0])) {
-		return nextR, nextC, grid, visited
+func copyGrid(grid [][]string) [][]string {
+	c := [][]string{}
+	for i := range len(grid) {
+		row := []string{}
+		for j := range len(grid[0]) {
+			row = append(row, grid[i][j])
+		}
+		c = append(c, row)
 	}
-
-	if grid[nextR][nextC] == "#" { // need to turn
-		nextDir := nextDirs[curDir]
-		grid[r][c] = nextDir
-	} else { // stay same direction
-		grid[r][c] = "."
-		r = nextR
-		c = nextC
-		grid[r][c] = curDir
-	}
-
-	return r, c, grid, visited
+	return c
 }
 
-func move2(r, c int, grid [][]string, visitedDirs [][][]string) (int, int, [][]string, [][][]string, bool) {
+// visited contains which direction we moved in at each coordinate
+func emptyVisited(n int) [][]map[string]bool {
+	out := make([][]map[string]bool, n)
+	for i := range n {
+		out[i] = make([]map[string]bool, n)
+		for j := range n {
+			out[i][j] = make(map[string]bool)
+		}
+	}
+	return out
+}
+
+// updates grid in place by moving the arrow one step, updates visited in place with position at start of step
+// returns r, c, bool where bool indicates out of bounds if were to take a step, ie you are on the very edge
+func step(r, c int, gridPtr *[][]string, visited *[][]map[string]bool) (int, int, bool) {
+	grid := *gridPtr
 	curDir := grid[r][c]
-	dirCoord := dirCoords[curDir]
-	visitedDirs[r][c] = append(visitedDirs[r][c], curDir)
-	nextR := r + dirCoord[0]
-	nextC := c + dirCoord[1]
-
-	if !(nextR >= 0 && nextR < len(grid) && nextC >= 0 && nextC < len(grid[0])) {
-		return nextR, nextC, grid, visitedDirs, false
+	// make location as visited with the current direction then take a step if valid
+	(*visited)[r][c][curDir] = true
+	nextR, nextC := r+dirCoords[curDir][0], c+dirCoords[curDir][1]
+	nextInBounds := nextR >= 0 && nextR < len(grid) && nextC >= 0 && nextC < len(grid[0])
+	if !nextInBounds {
+		return r, c, true
 	}
-
-	couldLoop := false
-	nextDir := ""
-	if grid[nextR][nextC] == "#" { // need to turn
-		nextDir = nextDirs[curDir]
-		nextDirCoord := dirCoords[nextDir]
-		nextR = r + nextDirCoord[0]
-		nextC = c + nextDirCoord[1]
-
-		grid[r][c] = nextDir
-	} else { // stay same direction
-		nextDir = curDir
-		// check if a loop is possible by imagining we need to turn and see if we follow that new direction we see a visitedDir
-		// that matches the new direction
-		loopDir := nextDirs[curDir]
-		loopDirCoord := dirCoords[loopDir]
-		loopR := r + loopDirCoord[0]
-		loopC := c + loopDirCoord[1]
-
-		couldLoop = checkLoop(loopR, loopC, loopDir, grid, visitedDirs)
+	// check for turn
+	if grid[nextR][nextC] == "#" {
+		// stay in place and turn
+		turnedDir := nextDirs[curDir]
+		grid[r][c] = turnedDir
+		return r, c, false
 	}
-
+	// step in current direction
 	grid[r][c] = "."
-	r = nextR
-	c = nextC
-	grid[r][c] = nextDir
+	grid[nextR][nextC] = curDir
 
-	return r, c, grid, visitedDirs, couldLoop
+	return nextR, nextC, false
 }
 
-func checkLoop(r, c int, loopDir string, grid [][]string, visitedDirs [][][]string) bool {
-	if loopDir == "^" {
-		for i := r; i >= 0; i-- {
-			if slices.Contains(visitedDirs[i][c], loopDir) {
-				return true
-			}
+// takes in a grid with a start location. traverses the grid till it exits or gets in a loop.
+// returns true if has a loop
+func traverse(r, c int, origGrid [][]string) bool {
+	grid := copyGrid(origGrid)
+	visited := emptyVisited(len(origGrid))
+	// break if make it out of grid or get in a loop
+	for {
+		done := false
+		r, c, done = step(r, c, &grid, &visited)
+		if done {
+			return false
 		}
-		return false
-	}
-	if loopDir == "v" {
-		for i := r; i < len(visitedDirs); i++ {
-			if slices.Contains(visitedDirs[i][c], loopDir) {
-				return true
-			}
-		}
-		return false
-	}
-	if loopDir == ">" {
-		for i := c; i < len(visitedDirs[0]); i++ {
-			if slices.Contains(visitedDirs[r][i], loopDir) {
-				return true
-			}
-		}
-		return false
-	}
-	if loopDir == "<" {
-		for i := c; i >= 0; i-- {
-			if slices.Contains(visitedDirs[r][i], loopDir) {
-				return true
-			}
-		}
-		return false
-	}
-	return false
-}
 
-//func checkLoop(r, c int, grid [][]string, visitedDirs [][][]string) bool {
-//	for r >= 0 && r < len(grid) && c >= 0 && c < len(grid[0]) {
-//		r, c, grid, visitedDirs, hasLoop = move2(r, c, grid, visitedDirs)
-//		if hasLoop {
-//			return true
-//		}
-//	}
-//	return false
-//}
+		curDir := grid[r][c]
+		looped := visited[r][c][curDir]
+		if looped {
+			return true
+		}
+	}
+}
 
 func part1() {
 	raw, _ := os.ReadFile("input.txt")
 	//raw, _ := os.ReadFile("test.txt")
 	data := string(raw)
 
-	grid := [][]string{}
-	visited := [][]string{}
+	origGrid := [][]string{}
 	for _, row := range strings.Split(data, "\n") {
-		grid = append(grid, strings.Split(row, ""))
-		visited = append(visited, strings.Split(row, ""))
+		origGrid = append(origGrid, strings.Split(row, ""))
 	}
 
-	r := -1
-	c := -1
-	for i := range len(grid) {
-		for j := range len(grid[0]) {
-			if grid[i][j] == "^" {
-				r = i
-				c = j
+	// find start
+	startR := -1
+	startC := -1
+	for i := range len(origGrid) {
+		for j := range len(origGrid[0]) {
+			if origGrid[i][j] == "^" {
+				startR = i
+				startC = j
 				break
 			}
 		}
 	}
 
-	for r >= 0 && r < len(grid) && c >= 0 && c < len(grid[0]) {
-		r, c, grid, visited = move(r, c, grid, visited)
-	}
-
-	tot := 0
-	for i := range len(visited) {
-		for j := range len(visited[0]) {
-			if visited[i][j] == "X" {
-				tot += 1
+	visited := emptyVisited(len(origGrid))
+	grid := copyGrid(origGrid)
+	r := startR
+	c := startC
+	for {
+		// walk through the guards path and at each step imagine there is an obstacle in front of us and see if it would cause
+		// a loop
+		done := false
+		r, c, done = step(r, c, &grid, &visited)
+		if done {
+			count := 0
+			for i := range len(visited) {
+				for j := range len(visited[0]) {
+					if len(visited[i][j]) > 0 {
+						count++
+					}
+				}
 			}
+			fmt.Println(count)
+
+			return
 		}
 	}
-	fmt.Println(tot)
 }
 
 func part2() {
-	//raw, _ := os.ReadFile("input.txt")
-	raw, _ := os.ReadFile("test.txt")
+	raw, _ := os.ReadFile("input.txt")
+	//raw, _ := os.ReadFile("test.txt")
 	data := string(raw)
 
-	grid := [][]string{}
-	visitedDirs := [][][]string{}
+	origGrid := [][]string{}
 	for _, row := range strings.Split(data, "\n") {
-		grid = append(grid, strings.Split(row, ""))
-		dirRow := [][]string{}
-		for range len(strings.Split(row, "")) {
-			dirRow = append(dirRow, []string{})
-		}
-		visitedDirs = append(visitedDirs, dirRow)
+		origGrid = append(origGrid, strings.Split(row, ""))
 	}
 
-	r := -1
-	c := -1
-	for i := range len(grid) {
-		for j := range len(grid[0]) {
-			if grid[i][j] == "^" {
-				r = i
-				c = j
+	// find start
+	startR := -1
+	startC := -1
+	for i := range len(origGrid) {
+		for j := range len(origGrid[0]) {
+			if origGrid[i][j] == "^" {
+				startR = i
+				startC = j
 				break
 			}
 		}
 	}
 
+	visited := emptyVisited(len(origGrid))
+	grid := copyGrid(origGrid)
 	count := 0
-	couldLoop := false
-	for r >= 0 && r < len(grid) && c >= 0 && c < len(grid[0]) {
-		r, c, grid, visitedDirs, couldLoop = move2(r, c, grid, visitedDirs)
-		if couldLoop {
+	r := startR
+	c := startC
+	for {
+		// walk through the guards path and at each step imagine there is an obstacle in front of us and see if it would cause
+		// a loop
+		done := false
+		r, c, done = step(r, c, &grid, &visited)
+		if done {
+			fmt.Println(count)
+			return
+		}
+
+		curDir := grid[r][c]
+		withObstacle := copyGrid(origGrid)
+		// move start to current position
+		withObstacle[startR][startC] = "."
+		withObstacle[r][c] = curDir
+
+		// make sure obstacle goes in a valid spot
+		dirCoord := dirCoords[curDir]
+		obstacleR, obstacleC := r+dirCoord[0], c+dirCoord[1]
+		nextInBounds := obstacleR >= 0 && obstacleR < len(origGrid) && obstacleC >= 0 && obstacleC < len(origGrid[0])
+		if !nextInBounds {
+			fmt.Println(count)
+			return
+		}
+		// this means we already visited where the obstacle would go so we would have ran into ito earlier so skip it
+		if len(visited[obstacleR][obstacleC]) > 0 {
+			continue
+		}
+		// place obstacle, and check if we started from there would we get in a loop
+		withObstacle[obstacleR][obstacleC] = "#"
+		hasLoop := traverse(r, c, withObstacle)
+		if hasLoop {
 			count += 1
 		}
 	}
-	fmt.Println(count)
 }
 
 func main() {
-	//part1()
+	part1()
 	part2()
 }
