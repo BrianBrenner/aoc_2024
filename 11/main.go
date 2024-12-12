@@ -5,11 +5,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // const totalBlinks = 12
 // breaks between 11 and 12
-const totalBlinks = 11
+const totalBlinks = 40
 
 func blink(stones []Stone) []Stone {
 	newStones := []Stone{}
@@ -32,8 +33,8 @@ func blink(stones []Stone) []Stone {
 }
 
 func part1() {
-	raw, _ := os.ReadFile("test.txt")
-	//raw, _ := os.ReadFile("input.txt")
+	//raw, _ := os.ReadFile("test.txt")
+	raw, _ := os.ReadFile("input.txt")
 	data := string(raw)
 	stones := []Stone{}
 	for _, char := range strings.Split(data, " ") {
@@ -43,12 +44,8 @@ func part1() {
 
 	for range totalBlinks {
 		stones = blink(stones)
-		//fmt.Println(stones)
-		//fmt.Println("***")
 	}
-	fmt.Println(stones)
 	fmt.Println(len(stones))
-	fmt.Println("**")
 }
 
 // process each number individually, then sum lengths
@@ -85,11 +82,11 @@ var stoneCache = map[int][]int{
 	2: []int{4, 0, 4, 8},
 	3: []int{6, 0, 7, 2},
 	4: []int{8, 0, 9, 6},
-	5: []int{1, 0, 1, 2, 0},
-	6: []int{1, 2, 1, 4, 4},
-	7: []int{1, 4, 1, 6, 8},
-	8: []int{1, 6, 1, 9, 2},
-	9: []int{1, 8, 2, 1, 6},
+	5: []int{2, 0, 4, 8, 2, 8, 8, 0},
+	6: []int{2, 4, 5, 7, 9, 4, 5, 6},
+	7: []int{2, 8, 6, 7, 6, 0, 3, 2},
+	//8: []int{3, 2, 7, 7, 2, 6, 8},
+	9: []int{3, 6, 8, 6, 9, 1, 8, 4},
 }
 
 var blinkCache = map[int]int{
@@ -101,7 +98,7 @@ var blinkCache = map[int]int{
 	5: 5,
 	6: 5,
 	7: 5,
-	8: 5,
+	//8: 5,
 	9: 5,
 }
 
@@ -113,28 +110,26 @@ func isPowOf2(n int) int {
 	return n & (n - 1)
 }
 
-var temp = []Stone{}
-
 func blink2(stones []Stone, tot *int) {
 	for _, stone := range stones {
 		if stone.Blinks > totalBlinks {
 			fmt.Println("uh oh")
 		}
 		if stone.Blinks == totalBlinks {
-			temp = append(temp, stone)
 			continue
 		}
 		strNum := strconv.Itoa(stone.Val)
 		// use cache
-		if len(strNum) == 1 {
+		if len(strNum) == 1 && stone.Val != 8 {
 			next := stoneCache[stone.Val]
 			nextBlink := stone.Blinks + blinkCache[stone.Val]
 			nextStones := []Stone{}
 			// if cache would go too far, then bruteforce
 			if nextBlink > totalBlinks {
 				// manually step until at max blinks
+				nextStones = []Stone{stone}
 				for range totalBlinks - stone.Blinks {
-					nextStones = blink([]Stone{stone})
+					nextStones = blink(nextStones)
 				}
 			} else {
 				for _, val := range next {
@@ -171,8 +166,8 @@ func blink2(stones []Stone, tot *int) {
 }
 
 func part2() {
-	raw, _ := os.ReadFile("test.txt")
-	//raw, _ := os.ReadFile("input.txt")
+	//raw, _ := os.ReadFile("test.txt")
+	raw, _ := os.ReadFile("input.txt")
 	data := string(raw)
 	stones := []Stone{}
 	for _, char := range strings.Split(data, " ") {
@@ -192,7 +187,10 @@ func part2() {
 }
 
 func main() {
+	start := time.Now()
 	part1()
+	fmt.Println(time.Since(start))
+	start = time.Now()
 	part2()
-	fmt.Println(temp)
+	fmt.Println(time.Since(start))
 }
