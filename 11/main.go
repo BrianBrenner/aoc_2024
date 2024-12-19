@@ -5,75 +5,26 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-// const totalBlinks = 12
-// breaks between 11 and 12
-const totalBlinks = 40
-
-func blink(stones []Stone) []Stone {
-	newStones := []Stone{}
+func blink(stones []int) []int {
+	newStones := []int{}
 	for _, stone := range stones {
-		if stone.Val == 0 {
-			newStones = append(newStones, Stone{1, stone.Blinks + 1})
+		if stone == 0 {
+			newStones = append(newStones, 1)
 			continue
 		}
-		strNum := strconv.Itoa(stone.Val)
+		strNum := strconv.Itoa(stone)
 		if len(strNum)%2 == 0 {
 			l, _ := strconv.Atoi(strNum[:len(strNum)/2])
 			r, _ := strconv.Atoi(strNum[len(strNum)/2:])
-			newStones = append(newStones, Stone{l, stone.Blinks + 1}, Stone{r, stone.Blinks + 1})
+			newStones = append(newStones, l, r)
 			continue
 		}
-		newStones = append(newStones, Stone{stone.Val * 2024, stone.Blinks + 1})
+		newStones = append(newStones, stone*2024)
 	}
 
 	return newStones
-}
-
-func part1() {
-	//raw, _ := os.ReadFile("test.txt")
-	raw, _ := os.ReadFile("input.txt")
-	data := string(raw)
-	stones := []Stone{}
-	for _, char := range strings.Split(data, " ") {
-		num, _ := strconv.Atoi(char)
-		stones = append(stones, Stone{num, 0})
-	}
-
-	for range totalBlinks {
-		stones = blink(stones)
-	}
-	fmt.Println(len(stones))
-}
-
-// process each number individually, then sum lengths
-// once a number has an even number of digits, it will always get split down into individual digits
-// ie 21 -> 2,1 (2 digits, 2 steps)
-// ie 2048 -> 20,48 -> 2,0,4,8 (4 digits, 3 steps)
-// ie 28676032 -> 2867,6032 -> 28,67,60,32 -> 2,8,6,7,6,0,3,2 (8 digits, 4 steps)
-// ie (16 digits, 5 steps)
-// non factors or 2 are more complicated
-
-// I think keep cache of single digit number, then use knowledge of factor of 2's to skip steps
-// 0 takes 4 blinks to get to 2,0,2,4
-// 1,2,3,4 behave same. take 3 blinks to get to digits of n*2024 (a 4 digit number)
-// 5-9 behave same, take 5 blinks to get to digits of n*2024 (a 5 digit number)
-
-// have struct stone {
-//	val int
-// blinks int
-//}
-// I think write function that takes in an array of stones
-// loop over each stone, if is single digit or power of two, use cache, and update array with new stones with value and blinks
-// if blinks for stone is 75 skip
-// if all stones have blinks of 75, done
-// there is a way to not actually store the whole array, but my brain hurts
-
-type Stone struct {
-	Val    int
-	Blinks int
 }
 
 var stoneCache = map[int][]int{
@@ -85,7 +36,7 @@ var stoneCache = map[int][]int{
 	5: []int{2, 0, 4, 8, 2, 8, 8, 0},
 	6: []int{2, 4, 5, 7, 9, 4, 5, 6},
 	7: []int{2, 8, 6, 7, 6, 0, 3, 2},
-	//8: []int{3, 2, 7, 7, 2, 6, 8},
+	8: []int{3, 2, 7, 7, 2, 6, 16192},
 	9: []int{3, 6, 8, 6, 9, 1, 8, 4},
 }
 
@@ -98,99 +49,145 @@ var blinkCache = map[int]int{
 	5: 5,
 	6: 5,
 	7: 5,
-	//8: 5,
+	8: 5,
 	9: 5,
 }
 
-func isPowOf2(n int) int {
-	//added one corner case if n is zero it will also consider as power 2
-	if n == 0 {
-		return 1
+// map[digit][blink][]numsAtBlink
+// TODO: make array instead of map
+func buildCache() map[int]map[int]int {
+	cache := map[int]map[int]int{}
+	cache[0] = map[int]int{}
+	stones := []int{0}
+	for i := range 5 {
+		if i == 0 {
+			//cache[0][i] = make([]int, 0)
+			cache[0][i] = len(stones)
+		} else {
+			stones = blink(stones)
+			cache[0][i] = len(stones)
+		}
+
 	}
-	return n & (n - 1)
+	for j := 1; j <= 4; j++ {
+		cache[j] = map[int]int{}
+		stones = []int{j}
+		for i := range 4 {
+			if i != 0 {
+				stones = blink(stones)
+			}
+			cache[j][i] = len(stones)
+		}
+	}
+	for j := 5; j <= 7; j++ {
+		cache[j] = map[int]int{}
+		stones = []int{j}
+		for i := range 6 {
+			if i != 0 {
+				stones = blink(stones)
+			}
+			cache[j][i] = len(stones)
+		}
+	}
+
+	cache[8] = map[int]int{
+		0: 1,
+		1: 1,
+		2: 1,
+		3: 2,
+		4: 4,
+		5: 7,
+	}
+
+	for j := 9; j < 10; j++ {
+		cache[j] = map[int]int{}
+		stones = []int{j}
+		for i := range 6 {
+			if i != 0 {
+				stones = blink(stones)
+			}
+			cache[j][i] = len(stones)
+		}
+	}
+	return cache
 }
 
-func blink2(stones []Stone, tot *int) {
-	for _, stone := range stones {
-		if stone.Blinks > totalBlinks {
-			fmt.Println("uh oh")
-		}
-		if stone.Blinks == totalBlinks {
-			continue
-		}
-		strNum := strconv.Itoa(stone.Val)
-		// use cache
-		if len(strNum) == 1 && stone.Val != 8 {
-			next := stoneCache[stone.Val]
-			nextBlink := stone.Blinks + blinkCache[stone.Val]
-			nextStones := []Stone{}
-			// if cache would go too far, then bruteforce
-			if nextBlink > totalBlinks {
-				// manually step until at max blinks
-				nextStones = []Stone{stone}
-				for range totalBlinks - stone.Blinks {
-					nextStones = blink(nextStones)
-				}
-			} else {
-				for _, val := range next {
-					nextStones = append(nextStones, Stone{val, nextBlink})
-				}
-			}
-
-			*tot += len(nextStones) - 1
-			blink2(nextStones, tot)
-			continue
-		}
-
-		nextStones := blink([]Stone{stone})
-		*tot += len(nextStones) - 1
-		blink2(nextStones, tot)
-
-		//if isPowOf2(len(strNum)) == 0 {
-		//	blinks := int(math.Log2(float64(len(strNum))) + 1)
-		//	digits := strings.Split(strNum, "")
-		//	nextStones := []Stone{}
-		//	for _, digit := range digits {
-		//		// TODO: maybe have to handle 1000 -> becomes 1,0,0 not 1,0,0,0
-		//		// maybe just bruteforce this part
-		//		val, _ := strconv.Atoi(digit)
-		//		nextStones = append(nextStones, Stone{val, stone.Blinks + blinks})
-		//	}
-		//	*tot += len(nextStones) - 1
-		//	blink2(nextStones, tot)
-		//	continue
-		//}
-
+// num must be single digit
+func blinkLength(num int, numBlinks int, cache *map[int]map[int]int) int {
+	if numBlinks == 0 {
+		return 1
 	}
-	return
+	val, ok := (*cache)[num][numBlinks]
+	// in cache, base case
+	if ok {
+		return val
+	}
+
+	totLen := 0
+	// too big
+	if num >= 10 {
+		nextStones := blink([]int{num})
+		for _, nextStone := range nextStones {
+			nextLength := blinkLength(nextStone, numBlinks-1, cache)
+			totLen += nextLength
+		}
+	} else {
+		// not in cache, single digit
+		for _, i := range stoneCache[num] {
+			if i == 16192 {
+				//fmt.Println("stop")
+				nextBlinks := numBlinks - 4
+				nextLength := blinkLength(8, nextBlinks, cache)
+				totLen += nextLength
+				(*cache)[8][nextBlinks] = nextLength
+			} else {
+				nextBlinks := numBlinks - blinkCache[num]
+				nextLength := blinkLength(i, nextBlinks, cache)
+				totLen += nextLength
+				(*cache)[i][nextBlinks] = nextLength
+			}
+		}
+	}
+	return totLen
+}
+
+func part1() {
+	//raw, _ := os.ReadFile("test.txt")
+	raw, _ := os.ReadFile("input.txt")
+	data := string(raw)
+	stones := []int{}
+	for _, char := range strings.Split(data, " ") {
+		num, _ := strconv.Atoi(char)
+		stones = append(stones, num)
+	}
+
+	cache := buildCache()
+	tot := 0
+	for _, stone := range stones {
+		tot += blinkLength(stone, 25, &cache)
+	}
+	fmt.Println(tot)
 }
 
 func part2() {
 	//raw, _ := os.ReadFile("test.txt")
 	raw, _ := os.ReadFile("input.txt")
 	data := string(raw)
-	stones := []Stone{}
+	stones := []int{}
 	for _, char := range strings.Split(data, " ") {
 		num, _ := strconv.Atoi(char)
-		stones = append(stones, Stone{num, 0})
+		stones = append(stones, num)
 	}
-	//for i := range 6 {
-	//	nums = blink(nums)
-	//	fmt.Println(i + 1)
-	//	fmt.Println(nums)
-	//	fmt.Println("****")
-	//}
-	tot := len(stones)
-	blink2(stones, &tot)
+
+	cache := buildCache()
+	tot := 0
+	for _, stone := range stones {
+		tot += blinkLength(stone, 75, &cache)
+	}
 	fmt.Println(tot)
-	//fmt.Println(len(nums))
 }
 
 func main() {
-	start := time.Now()
 	part1()
-	fmt.Println(time.Since(start))
-	start = time.Now()
 	part2()
-	fmt.Println(time.Since(start))
 }
